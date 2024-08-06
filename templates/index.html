@@ -1,0 +1,75 @@
+{% extends "html" %}
+
+{% block content %}
+
+<input id="command" type="text" class="form-control font-monospace">
+<div id="response" class="small font-monospace p-3 mt-4"><dialogs-activity reverse project="{{ project_name }}" api="{{ url_for('ui', _external=True) + '/api' }}"></dialogs-activity></div>
+
+<script>
+    url = '/api';
+    ui = {
+        command: document.getElementById('command'),
+        response: document.getElementById('response')
+    };
+    document.addEventListener('DOMContentLoaded', init);
+
+    function init() {
+        // App state initialization
+        adjust_dom_heights();
+        ui.command.focus();
+        ui.command.selectionStart = ui.command.selectionEnd = ui.command.value.length;
+        // Event handlers
+        document.addEventListener('keydown', (event) => {
+            if (event.key == 'Enter') execute(event.target.value);
+        });
+        window.addEventListener('resize', adjust_dom_heights);
+    }
+
+    // Execute shell commands
+    async function execute(command) {
+        if (!command) return;
+        console.info('Executing...', command);
+        ui.response.innerHTML += `<pre class="text-info">${command}</pre>`;
+        try {
+            const response = await fetch(`${url}/${command}`);
+            if (response.ok) {
+                const shell = await response.json();
+                if (shell.error) {
+                    console.warn(shell.error);
+                    ui.response.innerHTML += `<pre class="text-danger">${shell.error}</pre>`;
+                }
+                if (shell.output) {
+                    console.info(shell.output);
+                    ui.response.innerHTML += `<pre class="">${shell.output}</pre>`;
+                }
+                if (!shell.error) {
+                    ui.command.value = '';
+                }
+                adjust_dom_heights();
+            } else {
+                const error = new DOMParser().parseFromString(await response.text(), 'text/html').body.textContent || "";
+                console.error(`Failed to get response fron shell: ${error}`);
+                ui.response.innerHTML += `<div class="alert alert-danger">${error}</div>`;
+            }
+        } catch (error) {
+            console.error(`Error during execution:`, error);
+            ui.response.innerHTML += `<div class="alert alert-danger">${error}</div>`;
+        } finally {
+            ui.response.innerHTML += `<hr>`;
+        }
+    }
+
+    // Resize log div to fit page height
+    function adjust_dom_heights() {
+        const paddingBottom = 25;
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        // Adjust log div height
+        const topPosition = ui.response.getBoundingClientRect().top;
+        ui.response.style.overflow = 'scroll';
+        ui.response.style.height = (viewportHeight - topPosition - paddingBottom) + 'px';
+        ui.response.scrollTop = ui.response.scrollHeight;
+    }
+</script>
+
+{% endblock %}
